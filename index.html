@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simple Weather</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      --bg-light: linear-gradient(#2a4c61);
+      --bg-dark: linear-gradient(135deg, #0f172a, #020617);
+      --card-light: #697d8a;
+      --card-dark: #0b1220;
+      --text-light: #334155;
+      --text-dark: #e5e7eb;
+      --muted-light: #64748b;
+      --muted-dark: #9ca3af;
+
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-light);
+      color: var(--text-light);
+      transition: background 0.6s ease, color 0.6s ease;
+    }
+
+    body.dark {
+      background: var(--bg-dark);
+      color: var(--text-dark);
+    }
+
+    .card {
+      background: var(--card-light);
+      width: 100%;
+      max-width: 360px;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      transition: background 0.6s ease;
+    }
+
+    body.dark .card {
+      background: var(--card-dark);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.25rem;
+    }
+
+    /* 🌙☀️ Toggle */
+    .toggle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #e5e7eb;
+      transition: background 0.4s ease;
+    }
+
+    body.dark .toggle {
+      background: #334155;
+    }
+
+    .icon {
+      font-size: 1.3rem;
+      transition: transform 0.6s ease, opacity 0.3s ease;
+    }
+
+    body.dark .icon {
+      transform: rotate(360deg) scale(1.1);
+    }
+
+    .search {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      font-size: 1rem;
+    }
+
+    body.dark input {
+      background: #020617;
+      color: var(--text-dark);
+      border-color: #1e293b;
+    }
+
+    button.searchBtn {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: none;
+      background: #3b82f6;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    button.searchBtn:hover {
+      background: #2563eb;
+    }
+
+    .weather {
+      text-align: center;
+      margin-top: 16px;
+    }
+
+    .temp {
+      font-size: 3rem;
+      font-weight: 700;
+    }
+
+    .meta,
+    .loading {
+      color: var(--muted-light);
+      font-size: 0.9rem;
+    }
+
+    body.dark .meta,
+    body.dark .loading {
+      color: var(--muted-dark);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>☁️ Weather</h1>
+      <button class="toggle" id="themeToggle" aria-label="Toggle theme">
+        <span class="icon" id="themeIcon">🌙</span>
+      </button>
+    </div>
+
+    <div class="search">
+      <input id="cityInput" placeholder="Enter city" />
+      <button class="searchBtn" id="searchBtn">Go</button>
+    </div>
+
+    <div id="status" class="loading"></div>
+
+    <div id="weather" class="weather" hidden>
+      <div class="temp" id="temp"></div>
+      <div class="meta" id="wind"></div>
+    </div>
+  </div>
+
+  <script>
+    const body = document.body;
+    const toggleBtn = document.getElementById('themeToggle');
+    const icon = document.getElementById('themeIcon');
+
+    function applyTheme(theme) {
+      if (theme === 'dark') {
+        body.classList.add('dark');
+        icon.textContent = '☀️';
+      } else {
+        body.classList.remove('dark');
+        icon.textContent = '🌙';
+      }
+    }
+
+    toggleBtn.addEventListener('click', () => {
+      const isDark = body.classList.toggle('dark');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      icon.textContent = isDark ? '☀️' : '🌙';
+    });
+
+    applyTheme(localStorage.getItem('theme') || 'light');
+
+    document.getElementById('searchBtn').addEventListener('click', searchWeather);
+
+    async function searchWeather() {
+      const city = document.getElementById('cityInput').value.trim();
+      if (!city) return;
+
+      document.getElementById('status').textContent = 'Loading…';
+      document.getElementById('weather').hidden = true;
+
+      try {
+        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`);
+        const geo = await geoRes.json();
+        if (!geo.results) throw new Error();
+
+        const { latitude, longitude, name, country } = geo.results[0];
+
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
+        const data = await weatherRes.json();
+        const w = data.current_weather;
+
+        document.getElementById('temp').textContent = `${Math.round(w.temperature)}°C`;
+        document.getElementById('wind').textContent = `${name}, ${country} · Wind ${w.windspeed} km/h`;
+        document.getElementById('weather').hidden = false;
+        document.getElementById('status').textContent = '';
+      } catch {
+        document.getElementById('status').textContent = 'Could not fetch weather';
+      }
+    }
+  </script>
+</body>
+</html>
+
