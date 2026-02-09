@@ -11,7 +11,7 @@
     }
 
     body {
-      --bg-light: linear-gradient(135deg, #999DA0);
+      --bg-light: linear-gradient(#676b6e);
       --bg-dark: linear-gradient(135deg, #0f172a, #020617);
       --card-light: #999DA0;
       --card-dark: #0b1220;
@@ -27,7 +27,7 @@
       justify-content: center;
       background: var(--bg-light);
       color: var(--text-light);
-      transition: background 1.4s ease, color 1.4s ease;
+      transition: background-color 1.4s ease-in-out;
     }
 
     body.dark {
@@ -43,6 +43,17 @@
       border-radius: 16px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.08);
       transition: background 1.4s ease;
+      transition: box-shadow 1.4s ease;
+    }
+
+    input,
+    button,
+    .hour,
+    .day {
+      transition:
+        background-color 1.4s ease,
+        color 1.4s ease,
+        border-color 1.4s ease;
     }
 
     body.dark .card {
@@ -166,7 +177,7 @@
     }
 
     .daily {
-      margin-top: 16px;
+      margin-top: 16px;  
     }
 
     .day {
@@ -192,6 +203,16 @@
 
     .card {
       gap: 12px;
+    }
+
+    .hour.now {
+      border: 2px solid #3b82f6;
+      background: rgba(59, 130, 246, 0.12);
+      font-weight: 600;
+    }
+
+    body.dark .hour.now {
+      background: rgba(59, 130, 246, 0.25);
     }
 
 
@@ -245,6 +266,21 @@
 
     applyTheme(localStorage.getItem('theme') || 'light');
 
+    const weatherIcons = {
+      0: "☀️",        // Clear
+      1: "🌤️", 2: "⛅", 3: "☁️",
+      45: "🌫️", 48: "🌫️",
+      51: "🌦️", 53: "🌦️", 55: "🌧️",
+      61: "🌧️", 63: "🌧️", 65: "🌧️",
+      71: "🌨️", 73: "🌨️", 75: "❄️",
+      80: "🌦️", 81: "🌦️", 82: "🌧️",
+      95: "⛈️",
+    };
+
+    function iconFor(code) {
+      return weatherIcons[code] || "❔";
+    }
+
     document.getElementById('searchBtn').addEventListener('click', searchWeather);
 
     // Enter key support
@@ -271,17 +307,19 @@
         const weatherRes = await fetch(
   `https://api.open-meteo.com/v1/forecast` +
   `?latitude=${latitude}&longitude=${longitude}` +
-  `&hourly=temperature_2m,windspeed_10m` +
-  `&daily=temperature_2m_max,temperature_2m_min` +
+  `&hourly=temperature_2m,windspeed_10m,weathercode` +
+  `&daily=temperature_2m_max,temperature_2m_min,weathercode` +
   `&timezone=auto`
 );
 
 const data = await weatherRes.json();
+console.log("DEBUG weathercode:", data.hourly.weathercode);
 
 /* --- NOW (current hour) --- */
-const nowIndex = data.hourly.time.indexOf(
-  data.hourly.time.find(t => new Date(t) >= new Date())
-);
+const now = new Date();
+
+const nowIndex = data.hourly.time.findIndex(t => new Date(t) > now);
+const safeNowIndex = nowIndex === -1 ? 0 : nowIndex;
 
 const currentTemp = data.hourly.temperature_2m[nowIndex];
 const currentWind = data.hourly.windspeed_10m[nowIndex];
@@ -293,17 +331,34 @@ document.getElementById('wind').textContent =
   `${name}, ${country} · Wind ${Math.round(currentWind)} km/h`;
 
 /* --- 24h HOURLY --- */
+const hours = data.hourly.time.slice(0, 24);
+const temps = data.hourly.temperature_2m.slice(0, 24);
+const codes = data.hourly.weathercode.slice(0, 24);
+
 document.getElementById('hourly').innerHTML =
-  data.hourly.time.slice(0, 24).map((t, i) => `
-    <div class="hour">
-      <div>${new Date(t).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      })}</div>
-      <strong>${Math.round(data.hourly.temperature_2m[i])}°</strong>
+  hours.map((t, i) => `
+    <div class="hour ${i === safeNowIndex ? 'now' : ''}">
+      <div class="hour-icon">${iconFor(codes[i])}</div>
+      <div>
+        ${i === safeNowIndex
+          ? 'Now'
+          : new Date(t).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false
+            })}
+      </div>
+      <strong>${Math.round(temps[i])}°</strong>
     </div>
   `).join('');
+  
+  requestAnimationFrame(() => {
+    document.querySelector('.hour.now')?.scrollIntoView({
+      behavior: 'smooth',
+      inline: 'center',
+      block: 'nearest'
+    });
+  });
 
 /* --- 7 DAY FORECAST --- */
   document.getElementById('daily').innerHTML =
