@@ -11,9 +11,9 @@
     }
 
     body {
-      --bg-light: linear-gradient(#2a4c61);
+      --bg-light: linear-gradient(135deg, #999DA0);
       --bg-dark: linear-gradient(135deg, #0f172a, #020617);
-      --card-light: #697d8a;
+      --card-light: #999DA0;
       --card-dark: #0b1220;
       --text-light: #334155;
       --text-dark: #e5e7eb;
@@ -142,6 +142,59 @@
     body.dark .loading {
       color: var(--muted-dark);
     }
+
+    .hourly {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 12px 0;
+    margin-top: 12px;
+    } 
+
+    .hour {
+    min-width: 64px;
+    text-align: center;
+    padding: 8px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.35);
+    backdrop-filter: blur(6px);
+    font-size: 0.85rem;
+    } 
+
+    body.dark .hour {
+      background: rgba(15,23,42,0.6);
+    }
+
+    .daily {
+      margin-top: 16px;
+    }
+
+    .day {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 0.9rem;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+
+    body.dark .day {
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .weather, .hourly, .daily {
+      animation: fadeUp 0.4s ease;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      gap: 12px;
+    }
+
+
   </style>
 </head>
 <body>
@@ -164,6 +217,9 @@
       <div class="temp" id="temp"></div>
       <div class="meta" id="wind"></div>
     </div>
+    
+   <div id="hourly" class="hourly"></div>
+   <div id="daily" class="daily"></div>
   </div>
 
   <script>
@@ -191,6 +247,13 @@
 
     document.getElementById('searchBtn').addEventListener('click', searchWeather);
 
+    // Enter key support
+    document.getElementById('cityInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        searchWeather();
+      }
+    });
+
     async function searchWeather() {
       const city = document.getElementById('cityInput').value.trim();
       if (!city) return;
@@ -205,14 +268,57 @@
 
         const { latitude, longitude, name, country } = geo.results[0];
 
-        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
-        const data = await weatherRes.json();
-        const w = data.current_weather;
+        const weatherRes = await fetch(
+  `https://api.open-meteo.com/v1/forecast` +
+  `?latitude=${latitude}&longitude=${longitude}` +
+  `&hourly=temperature_2m,windspeed_10m` +
+  `&daily=temperature_2m_max,temperature_2m_min` +
+  `&timezone=auto`
+);
 
-        document.getElementById('temp').textContent = `${Math.round(w.temperature)}°C`;
-        document.getElementById('wind').textContent = `${name}, ${country} · Wind ${w.windspeed} km/h`;
-        document.getElementById('weather').hidden = false;
-        document.getElementById('status').textContent = '';
+const data = await weatherRes.json();
+
+/* --- NOW (current hour) --- */
+const nowIndex = data.hourly.time.indexOf(
+  data.hourly.time.find(t => new Date(t) >= new Date())
+);
+
+const currentTemp = data.hourly.temperature_2m[nowIndex];
+const currentWind = data.hourly.windspeed_10m[nowIndex];
+
+document.getElementById('temp').textContent =
+  `${Math.round(currentTemp)}°C`;
+
+document.getElementById('wind').textContent =
+  `${name}, ${country} · Wind ${Math.round(currentWind)} km/h`;
+
+/* --- 24h HOURLY --- */
+document.getElementById('hourly').innerHTML =
+  data.hourly.time.slice(0, 24).map((t, i) => `
+    <div class="hour">
+      <div>${new Date(t).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      })}</div>
+      <strong>${Math.round(data.hourly.temperature_2m[i])}°</strong>
+    </div>
+  `).join('');
+
+/* --- 7 DAY FORECAST --- */
+  document.getElementById('daily').innerHTML =
+    data.daily.time.map((d, i) => `
+      <div class="day">
+        <span>${new Date(d).toLocaleDateString(undefined, { weekday: 'short' })}</span>
+        <span>
+          ${Math.round(data.daily.temperature_2m_min[i])}° /
+          ${Math.round(data.daily.temperature_2m_max[i])}°
+        </span>
+      </div>
+    `).join('');
+
+document.getElementById('weather').hidden = false;
+document.getElementById('status').textContent = '';
       } catch {
         document.getElementById('status').textContent = 'Could not fetch weather';
       }
